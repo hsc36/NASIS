@@ -18,21 +18,28 @@ if len(cmdLineArgs) > 1:
 		inDebug = False
 
 ###--- Read Configuration Files and Store Data---###
-# Containers
-serialSetupData = namedtuple('serialData', 'comport baudeRate timeout')
-socketSetupData = namedtuple('socketData', 'hostName hostPort')
-# Serial Setup
-comport = '/dev/ttyUSB0'
-baudeRate = 9600
-timeout = 1
-serialSetup = serialSetupData(comport=comport, baudeRate=baudeRate, timeout=timeout)
-# Socket Setup
-hostName = 'http://ServerAddress.com'
-hostPort = 8080
-socketSetup = socketSetupData(hostName=hostName, hostPort=hostPort)
-# Rocket & Launcher Address Code Pairs
-allAddressCodes = []
-
+def getConfiguration():
+	# Containers
+	serialSetupData = namedtuple('serialData', 'comport baudeRate timeout')
+	socketSetupData = namedtuple('socketData', 'address port')
+	## Open the Communications Configuration File (comm.conf)
+	with open('app_configs/comm.conf') as comms, open('app_configs/pairs.conf') as pairs:
+		for line in comms:
+			if (not line.startswith('#')) and (len(line) > 0):
+				# Serial Setup
+				if line.startswith('comport'): comport = line.split('>')[-1].split()
+				if line.startswith('baudeRate'): baudeRate = line.split('>')[-1].split()
+				if line.startswith('timeout'): timeout = line.split('>')[-1].split()
+				# Socket Setup
+				if line.startswith('address'): address = line.split('>')[-1].split()
+				if line.startswith('port'): port = line.split('>')[-1].split()
+		serialSetup = serialSetupData(comport=comport, baudeRate=baudeRate, timeout=timeout)
+		socketSetup = socketSetupData(address=address, port=port)
+		# Rocket & Launcher Address Code Pairs
+		allAddressCodes = []
+		for line in pairs:
+			if (not line.startswith('#')) and (len(line) > 0):
+				allAddressCodes.append(line)
 
 ###--- General Functions ---###
 # Debug Print
@@ -72,7 +79,7 @@ def serial_setup(comport, baudeRate, timeout, allAddressCodes):
 	return xbee
 
 # Setup Socket (Command Center's AWS Server)
-def socket_setup(hostName, hostPort):
+def socket_setup(address, port):
 	# Setup the Socket for Server Connection
 	try:
 		server = socket.Socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -80,7 +87,7 @@ def socket_setup(hostName, hostPort):
 		logit('SOCKET_SETUP: ' + str(e), location, fileName, debug=inDebug)
 	# Connect to the Server
 	try:
-		server.connect(hostName, hostPort)
+		server.connect(address, port)
 	except Exception, e:
 		logit('SOCKET_SETUP: ' + str(e), location, fileName, debug=inDebug)
 	return server
@@ -104,10 +111,12 @@ def forward_rocket_data():
 ###--- Processes ---###
 # Initialization
 def initialization_process():
-	# Connect Pi to Server
+	# Configure the Application
+	getConfiguration()
+	# Connect Hub to Server
 	socket_setup(serialSetupData.comport, serialSetupData.baudeRate, serialSetupData.timeout)
-	# Connect Launchers and Rockets to Pi
-	serial_setup(socketSetupData.hostName, socketSetupData.hostPort)
+	# Connect Launchers and Rockets to Hub
+	serial_setup(socketSetupData.address, socketSetupData.port)
 
 # Standby
 def standby_process():
