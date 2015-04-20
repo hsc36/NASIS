@@ -1,0 +1,10 @@
+{
+	"node_id": {
+		"type": "string",
+		"description": "The unique ID of a node followed by the letter of the component it is being sent from. R = Rocket, L = Launcher, H = Hub"
+		},
+	"command": {
+		"type": "string",
+		"description": "The command being sent to the component"
+	}
+}

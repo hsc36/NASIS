@@ -3,27 +3,29 @@
 // Note: Launcher Code
 
 // Definitions
-#define LAUNCH_RELAY 5  // Relay PIN
+#define ALARM_RELAY 4   // Launcher Warning Alarm Relay PIN
+#define LAUNCH_RELAY 5  // Launcher Relay PIN
+#define R2L_RIP_CHORD 6 // Rocket Signal to Launcher - Rip Chord PIN - H2
+#define L2R_RIP_CHORD 7 // Launcher Signal to Rocket - Rip Chord PIN - H1
 
 // Variables
-String ID = "000001";
+int SOUND_PIN = A0; // Sound Sensor on A0 - F1
+int IR_PIN = A1;    // IR Distance Sensor on A1 - 
 boolean poweredOn = false;
-String powerOn = "{\"000001_launcher\":{\"powerOn\":\"True\"}}"; // Launcher Powered On
+// node_id = "000001L";
+String powerOn = "{\"node_id\":\"000001L\", \"message\":\"powered\"}"; // Launcher Powered On
 String received = ""; // Message Received Over Serial (from RaspberryPi)
+String checkCommand = "{\"node_id\":\"000001L\", \"command\":\"check\"}";
+String checked = "{\"node_id\":\"000001L\", \"message\":\"checked\", \"package\":{";
 boolean initialized = false;
-String initializeOn = "\n{\"000001_launcher\":{\"initialized\":\"True\"}}"; // Launcher Initialized (Prepping for Launch)
-String initCommand = "{\"000001_launcher\":{\"initCommand\":\"True\"}}"; // RaspberryPi Sent Initialization Command
+String initializeOn = "{\"node_id\":\"000001L\", \"message\":\"initialized\"}"; // Launcher Initialized (Prepping for Launch)
+String initCommand = "{\"node_id\":\"000001L\", \"command\":\"init\"}"; // RaspberryPi Sent Initialization Command
 boolean confirmIR = false;
 boolean confirmSound = false;
-boolean confirmFlame = false;
 boolean launchConfirmed = false;
 boolean launched = false;
-String launchConfirmOn = "\n{\"000001_launcher\":{\"launched\":\"True\"}}"; // Rocket Launch Confirmed
-String launchConfirmOff = "\n{\"000001_launcher\":{\"launched\":\"False\"}}"; // Rocket Launch Not Confirmed
-String launchCommand = "{\"000001_launcher\":{\"launchCommand\":\"True\"}}"; // RaspberryPi Sent Launch Command
-
-int IR_PIN = 3;  // IR Distance Sensor on A3
-int SOUND_PIN = 4;  // Sound Sensor on A4
+String launchConfirm = "{\"node_id\":\"000001L\", \"message\":\"launched\", \"package\":{";
+String launchCommand = "{\"node_id\":\"000001L\", \"command\":\"launch\"}"; // RaspberryPi Sent Launch Command
 
 // Setup //
 void setup(){
@@ -31,6 +33,14 @@ void setup(){
   // Rocket Launch Signal (Relay PIN)
   pinMode(LAUNCH_RELAY, OUTPUT);  // Mode
   digitalWrite(LAUNCH_RELAY, HIGH);  // Initial Value
+  // Rocket Signal to Launcher - Rip Chord (Audio Plug)
+  pinMode(R2L_RIP_CHORD, INPUT);
+  // Launcher Signal to Rocket - Rip Chord (Independent Wire)
+  pinMode(L2R_RIP_CHORD, OUTPUT);
+  digitalWrite(L2R_RIP_CHORD, HIGH);
+  // Alarm Warning
+  pinMode(ALARM_RELAY, OUTPUT);
+  digitalWrite(ALARM_RELAY, HIGH);
 }
 
 // Process //
@@ -54,27 +64,46 @@ void loop(){
       Serial.println(initializeOn);
       Serial.flush();
     }
+    else if(checkCommand.equals(received)){
+      // Check the Sensors and Append the Data
+      String temp = "";
+      temp += "\"sound\":\"";
+      temp += checkSound();
+      temp += "\", \"distance\":\"";
+      temp += checkIR();
+      temp += "\", \"chord\":\"";
+      temp += digitalRead(R2L_RIP_CHORD);
+      temp += "\"}}";  // Close the JSON Package
+      // Send the Data
+      Serial.println(checked + temp);
+      Serial.flush();
+    }
   }
   if(initialized && !launched && (Serial.available() > 0)){
     // Read from the Serial for a Command
     received = Serial.readStringUntil('\n');
     // If "LaunchCommand" is received and "isInitialized":
     if(launchCommand.equals(received)){
+      // Warning Alarm On
+      digitalWrite(ALARM_RELAY, LOW);
+      // Wait 3 Seconds
+      delay(3000.0);
+      digitalWrite(ALARM_RELAY, HIGH);
       // Launch Rocket
       digitalWrite(LAUNCH_RELAY, LOW);
-      // @NOTE: Options  1. WAIT, then get data from all 3 sensors before reporting successful launch
-      //                *2. WHILE NO confirmation for each of 3 keep checking for confirmation
-      // Confirm Launch by Reading the IR, Sound, and Flame Data
+      // WAIT, then get data from both sensors before reporting successful launch
+      // Confirm Launch by Reading the IR and Sound Sensors
       int sensorCount = 0;
       // 1: Check for Sound - In "Real-time"
-      while(sensorCount < 1000){ // 3 Seconds
+      while(sensorCount < 1000){ // ~2 Seconds Max (1000 rounds * 2ms delay)
         if((!confirmSound)){
           confirmSound = checkSound();
         }
-        delay(3.0);  // Delay Three Milliseconds
+        delay(2.0);  // Delay Two Milliseconds
         sensorCount = sensorCount + 1;
       }
       // 2: Check IR (if Rocket Present) - After it is expected to be gone
+      delay(500);  // Delay half-a-second
       confirmIR = checkIR();
       // If Launch is confirmed by Sound and Distance sensors:
       if(confirmSound && confirmIR){
@@ -91,12 +120,17 @@ void loop(){
     if(launched){
       // Switch off the Relay
       digitalWrite(LAUNCH_RELAY, HIGH);
-      // Send Data over Serial
-      if(launchConfirmed){
-        Serial.println(launchConfirmOn);
-      }else{
-        Serial.println(launchConfirmOff);
-      }
+      // Check the Sensors and Append the Data
+      String temp = "";
+      temp += "\"sound\":\"";
+      temp += confirmSound;
+      temp += "\", \"distance\":\"";
+      temp += confirmIR;
+      temp += "\", \"chord\":\"";
+      temp += digitalRead(R2L_RIP_CHORD);
+      temp += "\"}}";  // Close the JSON Package
+      // Send the Data
+      Serial.println(launchConfirm + temp);
       Serial.flush();
     }
   }
@@ -105,28 +139,26 @@ void loop(){
 // Other Functions //
 // Check if Rocket Launch Made Expected Sound
 boolean checkSound(){
-  if(analogRead(SOUND_PIN) > 1000){  // Resolution = 0-1023
-    //Serial.println("Sound = True");
-    return true;
-  }else{
-    //Serial.println("Sound = False");
-    return false;
-  }
+  boolean read_out = (analogRead(SOUND_PIN) > 800);  // Resolution = 0-1023
+  return read_out;
 }
 
 // Check if Rocket Left the Launcher
-boolean checkIR(){
-  float voltage = (analogRead(IR_PIN) * 0.0048828125); //Resolution: IR_PIN * (5/1024)
-  float distance = 65 * pow(voltage, -1.1); // Volts to Distance (See: http://luckylarry.co.uk/arduino-projects/arduino-using-a-sharp-ir-sensor-for-distance-calculation/)
-  //Serial.println(voltage, DEC);
-  //Serial.println(distance, DEC);
-  Serial.flush();
-  if(distance > 5.0){ // Distance (cm)
-    Serial.print("\nIR = True\n");
-    return true;
-  }else{
-    Serial.print("\nIR = False\n");
-    return false;
+boolean checkIR(){  // Distance Calculation From: http://www.udoo.org/ProjectsAndTutorials/android-and-arduino-on-udoo-bidirectional-communication/
+  float read_out = analogRead(IR_PIN);
+  if(read_out < 100){  // Low bound
+    read_out = 100;  
   }
-  Serial.flush();
+  else if(read_out > 900){  // High Bound
+    read_out = 900;
+  }
+  // Calculate Distance
+  //float distance = (2076.0/(read_out - 11) + 4);
+  //return read_out; // distance
+  if (read_out < 200){
+    return true;  // Rocket is Gone
+  }else{
+    return false; // Rocket is Present
+  }
+  // Serial.flush();
 }

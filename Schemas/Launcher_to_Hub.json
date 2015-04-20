@@ -1,0 +1,14 @@
+{
+	"node_id": {
+		"type": "string",
+		"description": "The unique ID of a node followed by the letter of the component it is being sent from. R = Rocket, L = Launcher, H = Hub"
+		},
+	"message": {
+		"type": "string",
+		"description": "The command or response being sent"
+	},
+	"package":{
+		"type": "object",
+		"description": "Contains any applicable data associated with the message"
+	}
+}
