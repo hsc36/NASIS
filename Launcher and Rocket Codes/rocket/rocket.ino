@@ -12,16 +12,15 @@
 #include <LPS.h>
 
 // IMU PIN Setup (UNO :: Micro)
-// SDA -> A4 :: 3
-// SCL -> A5 :: 2
+// SDA -> A4 :: 2
+// SCL -> A5 :: 3
 
-#define GEIGER_COUNTER 5  // Geiger Counter Data PIN
+#define GEIGER_COUNTER 2  // Geiger Counter Data PIN
 #define L2R_RIP_CHORD 6   // Launcher Signal to Rocket - Rip Chord PIN
 #define R2L_RIP_CHORD 7   // Rocket Signal to Launcher - Rip Chord PIN
 
 // Using microseconds
-#define LOG_PERIOD 5000000  // 15000ms => 15000000us
-#define MAX_PERIOD 60000000
+#define LOG_PERIOD 1000000  // 1s
 
 L3G gyro;
 LSM303 accel;
@@ -35,9 +34,13 @@ char gpsChar;
 
 unsigned long geigerCount;  // GM Tube events
 unsigned long geigerCpm;    // CPM
-unsigned int geigerMulti;   // CPM Multiplier
 unsigned long prevMicros;   // Process Time
 boolean maySendData = false;   // Only True when GeigerCount is Available
+
+// GPS Specific
+#define GPSECHO  false
+boolean usingInterrupt = false;
+void useInterrupt(boolean); // Func prototype keeps Arduino 0023 happy
 
 //String gps_str = "";
 
@@ -52,16 +55,24 @@ boolean launched = false;
 // String launchCommand = "{\"" + ID + "_rocket" + "\":{\"launchCommand\":\"True\"}}"; // RaspberryPi Sent Launch Command
 String dataStr = "";	// Sensor Data
 
+// Geiger Counter Specific
+void geigerTubeTimeImpulse(){
+  delay(1);
+  geigerCount += 1;;
+}
+
 // Setup Loop
 void setup(){
-  Wire.begin();
-  Serial.begin(9600); // Set Serial BaudeRate
+  Serial.begin(9600); // Set Serial BaudeRate (Needs to be faster in order to compensate for GPS)
   // GPS Module
   GPS.begin(9600);    // Set GPS Serial BaudeRate
-  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA); // Get recommended minimum and GGA data
-  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);    // GPS update rate
+  GPS.sendCommand(PMTK_SET_NMEA_OUTPUT_RMCGGA);  // Get recommended minimum and GGA data
+  GPS.sendCommand(PMTK_SET_NMEA_UPDATE_1HZ);     // GPS update rate (1, 5, or 10 Hz)
+  //GPS.sendCommand(PGCMD_ANTENNA);                // Antenna status updates
   // IMU Sensors
+  Wire.begin();
   accel.init();
+  gyro.init();
   accel.enableDefault();
   barom.enableDefault();
   gyro.enableDefault();
@@ -69,7 +80,43 @@ void setup(){
   pinMode(GEIGER_COUNTER, INPUT);                     // set pin INT0 input for capturing GM Tube events
   digitalWrite(GEIGER_COUNTER, HIGH);                 // turn on internal pullup resistors, solder C-INT on the PCB
   attachInterrupt(0, geigerTubeTimeImpulse, FALLING); // define external interrupts
+  // Rip Chords
+  pinMode(R2L_RIP_CHORD, OUTPUT);
+  digitalWrite(R2L_RIP_CHORD, HIGH);
+  pinMode(L2R_RIP_CHORD, INPUT);
+  // @TODO: Remove
+  //Serial.println(digitalRead(R2L_RIP_CHORD));
+  //Serial.println(digitalRead(L2R_RIP_CHORD));
 }
+
+//***** Taken from Adafruit GPS Parsing Example *****//
+// Interrupt is called once a microsecond, looks for any new GPS data, and stores it
+SIGNAL(TIMER0_COMPA_vect) {
+  char gpsChar = GPS.read();
+  // if you want to debug, this is a good time to do it!
+#ifdef UDR0
+  if(GPSECHO)
+    if(gpsChar) UDR0 = gpsChar;  
+    // writing direct to UDR0 is much much faster than Serial.print 
+    // but only one character can be written at a time. 
+#endif
+}
+void useInterrupt(boolean v) {
+  if(v) {
+    // Timer0 is already used for micros() - we'll just interrupt somewhere
+    // in the middle and call the "Compare A" function above
+    OCR0A = 0xAF;
+    TIMSK0 |= _BV(OCIE0A);
+    usingInterrupt = true;
+  } else {
+    // do not call the interrupt function COMPA anymore
+    TIMSK0 &= ~_BV(OCIE0A);
+    usingInterrupt = false;
+  }
+}
+//***************************************************//
+
+uint32_t timer = micros();
 
 // Process Loop
 void loop(){
@@ -81,133 +128,113 @@ void loop(){
   }
   // If Rocket is Launched
   if(launched){
-  	// Get Sensor Data
-  	dataStr = collectData();
-  	// Start Sending
-  	Serial.println("{\"node_id\":\"000001R\",\"data\":" + dataStr + "}");
+    //Serial.println("Collecting Data!");
+    if(!usingInterrupt) {
+    char gpsChar = GPS.read();
+    if(GPSECHO)
+      if(gpsChar){
+        Serial.print(gpsChar);
+      }
+    }
+    if(GPS.newNMEAreceived()){
+      if(!GPS.parse(GPS.lastNMEA())){
+        return;
+      }
+    }
+    if(timer > micros()){
+      timer = micros();
+    }
+    if(micros() - timer > 1000000) {
+      timer = micros(); // reset the timer
+      //Serial.println(timer);
+      // Get Sensor Data
+      dataStr = "";
+      if(GPS.fix){
+        collectData(String(GPS.latitudeDegrees, 4), String(GPS.longitudeDegrees, 4));
+      }else{
+        collectData("NO GPS LAT","NO GPS LON");
+      }
+      Serial.println(dataStr);
+    }
+    // Start Sending
+    //Serial.println("{\"node_id\":\"000001R\",\"data\":" + dataStr + "}");
   }else{
     if(digitalRead(L2R_RIP_CHORD) == LOW){
       launched = true;
+      //Serial.println("LAUNCHED!");
     }
   }
-  Serial.println(digitalRead(L2R_RIP_CHORD));
   // Reset Data Sending Permission 
   maySendData = false;
 }
 
 // Collect and Package Data from Sensors
-String collectData(){
-  // Serial.println("collectData"); // @TESTING
-  // Get GPS Location
-  String gpsData = getGPS();
+void collectData(String lat, String lon){
+  dataStr += "{\"gps\":";
+  dataStr += "{\"lat\":" + lat +",\"lon\":" + lon +"}";
+  dataStr += ",\"accelerometer\":";
   // Get Accelerometer Data
-  String accelData = getAccel();
+  dataStr += getAccel();
+  dataStr += ",\"gyroscope\":";
   // Get Gyroscope Data
-  String gyroData = getGyro();
+  dataStr += getGyro();
+  dataStr += ",\"barometer\":";
   // Get Barometer Data
-  String baromData = getBarom();
+  //dataStr += getBarom();
+  dataStr += "{\"pressure\":";
+  dataStr += barom.readPressureMillibars();
+  dataStr += ",\"altitude\":";
+  dataStr += barom.pressureToAltitudeMeters(barom.readPressureMillibars());
+  dataStr += ",\"temp\":";
+  dataStr += barom.readTemperatureC();
+  dataStr += "}";
+  dataStr += ",\"geigerCounter\":";
   // Get Geiger Counter Data
   String geigData = "";
   // Get current time in microseconds
   unsigned long currMicros = micros();
-  // Serial.println("currMicros: " + currMicros);
-  // Serial.println("prevMicros: " + prevMicros);
-  // Serial.println("LOG_PERIOD: " + LOG_PERIOD);
-  if(currMicros - prevMicros > LOG_PERIOD){
-    geigData = getGeig(currMicros);
-    maySendData = true;
-  }
-	// Compile into JSON-Formatted String
-	String collectedData = "";
-  collectedData += "{\"gps\":";
-  collectedData += gpsData;
-  collectedData += ",\"accelerometer\":";
-  collectedData += accelData;
-  collectedData += ",\"gyroscope\":";
-  collectedData += gyroData;
-  collectedData += ",\"barometer\":";
-  collectedData += baromData;
-  collectedData += ",\"geigerCounter\":";
-  collectedData += geigData;
-  collectedData += "}";
-  return collectedData;
+  dataStr += getGeig(currMicros);
+  maySendData = true;
+  dataStr += "}";
 }
 
-String getGPS(){
-  // Serial.println("getGPS"); // @TESTING
-  while(!GPS.newNMEAreceived()){
-    gpsChar = GPS.read();
-    break;  // @TESTING
-  }
-  GPS.parse(GPS.lastNMEA());
-  String nmeaStr = GPS.lastNMEA();
-  return nmeaStr;
+String getAccel(){  // Convert to binary, drop the lowest 4 bits, convert to float and multiply by 1000 to get number of "g"s 
+  accel.read();
+  // Append the values in JSON format
+  String accelStr = "";
+  accelStr += "{\"x\":";
+  accelStr += accel.a.x;
+  accelStr += ",\"y\":";
+  accelStr += accel.a.y;
+  accelStr += ",\"z\":";
+  accelStr += accel.a.z;
+  accelStr += "}";
+  return accelStr;
 }
 
-String getAccel(){
-  // Serial.println("getAccel"); // @TESTING
-  //float accelX = accel.a.x;
-  //float accelY = accel.a.y;
-  //float accelZ = accel.a.z;
+String getGyro(){ // Multiply by 0.00875 to get dps (degrees-per-second)
+  gyro.read();
   // Append the values in JSON format
   String gyroStr = "";
-  gyroStr += "{\"x\":\"";
-  gyroStr += accel.a.x;
-  gyroStr += "\",\"y\":\"";
-  gyroStr += accel.a.y;
-  gyroStr += "\",\"z\":\"";
-  gyroStr += accel.a.z;
-  gyroStr += "\"}";
-  return gyroStr;
-}
-
-String getGyro(){
-  // Serial.println("getGyro"); // @TESTING
-  //float gyroX = gyro.g.x;
-  //float gyroY = gyro.g.y;
-  //float gyroZ = gyro.g.z;
-  // Append the values in JSON format
-  String gyroStr = "";
-  gyroStr += "{\"x\":\"";
+  gyroStr += "{\"x\":";
   gyroStr += gyro.g.x;
-  gyroStr += "\",\"y\":\"";
+  gyroStr += ",\"y\":";
   gyroStr += gyro.g.y;
-  gyroStr += "\",\"z\":\"";
+  gyroStr += ",\"z\":";
   gyroStr += gyro.g.z;
-  gyroStr += "\"}";
+  gyroStr += "}";
   return gyroStr;
 }
 
-String getBarom(){
-  // Serial.println("getBarom"); // @TESTING
-  //float baromPres = barom.readPressureMillibars();
-  //float baromAlti = barom.pressureToAltitudeMeters(baromPres);
-  //float baromTemp = barom.readTemperatureC();
+String getGeig(float currMicros){
   // Append the values in JSON format
-  String baromStr = "";
-  baromStr += "{\"x\":\"";
-  baromStr += barom.readPressureMillibars();
-  baromStr += "\",\"y\":\"";
-  baromStr += barom.pressureToAltitudeMeters(barom.readPressureMillibars());
-  baromStr += "\",\"z\":\"";
-  baromStr += barom.readTemperatureC();
-  baromStr += "\"}";
-  return baromStr;
-}
-
-String getGeig(long currMicros){
-  // Serial.println("getGeig"); // @TESTING
-  prevMicros = currMicros;
-  geigerCpm = geigerCount * geigerMulti;
-  geigerCount = 0;
   String geigerStr = "";
-  geigerStr += "{\"count\":";
-  geigerStr += geigerCpm;
-  geigerStr += "}";
+  prevMicros = currMicros;
+  if(currMicros - prevMicros < LOG_PERIOD){
+    geigerStr += "{\"count\":";
+    geigerStr += geigerCount;
+    geigerStr += "}";
+  }
+  geigerCount = 0;
   return geigerStr;
-}
-
-void geigerTubeTimeImpulse(){
-  Serial.println("geigerTubeTimeImpulse");
-  geigerCount += 1;
 }

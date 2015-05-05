@@ -10,7 +10,7 @@
 
 // Variables
 int SOUND_PIN = A0; // Sound Sensor on A0 - F1
-int IR_PIN = A1;    // IR Distance Sensor on A1 - 
+int IR_PIN = A1;    // IR Distance Sensor on A1 - G1
 boolean poweredOn = false;
 // node_id = "000001L";
 String powerOn = "{\"node_id\":\"000001L\", \"message\":\"powered\"}"; // Launcher Powered On

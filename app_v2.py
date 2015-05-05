@@ -39,7 +39,7 @@ def read_config_files():
 	with open('app_configs/pairs.conf') as RL_ID_list:
 		RL_IDs = []
 		for line in RL_ID_list:
-			if (not line.startswith('#')) and (len(line) > 0):
+			if (not line.startswith('#')) and (len(line.strip()) > 0):
 				RL_IDs.append(line)
 	return serial_setup_configs, api_setup_configs, RL_IDs
 
