@@ -148,12 +148,14 @@ void loop(){
       timer = micros(); // reset the timer
       //Serial.println(timer);
       // Get Sensor Data
-      dataStr = "";
+      dataStr = "{\"node_id\":\"000001R\"";
       if(GPS.fix){
+        dataStr+= ",";
         collectData(String(GPS.latitudeDegrees, 4), String(GPS.longitudeDegrees, 4));
       }else{
         collectData("NO GPS LAT","NO GPS LON");
       }
+      dataStr += "}";
       Serial.println(dataStr);
     }
     // Start Sending
@@ -180,7 +182,6 @@ void collectData(String lat, String lon){
   dataStr += getGyro();
   dataStr += ",\"barometer\":";
   // Get Barometer Data
-  //dataStr += getBarom();
   dataStr += "{\"pressure\":";
   dataStr += barom.readPressureMillibars();
   dataStr += ",\"altitude\":";
@@ -188,11 +189,13 @@ void collectData(String lat, String lon){
   dataStr += ",\"temp\":";
   dataStr += barom.readTemperatureC();
   dataStr += "}";
-  dataStr += ",\"geigerCounter\":";
-  // Get Geiger Counter Data
-  String geigData = "";
   // Get current time in microseconds
+  dataStr += ",\"microseconds\":";
   unsigned long currMicros = micros();
+  dataStr += currMicros; 
+  dataStr += "}";
+  // Get Geiger Counter Data
+  dataStr += ",\"geigerCounter\":";
   dataStr += getGeig(currMicros);
   maySendData = true;
   dataStr += "}";

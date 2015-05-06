@@ -1,0 +1,38 @@
+- Power on Hub
+	- Hub reads config files
+	- Hub sets RestfulAPI and Serial configurations
+	- Hub reads all incoming serial data
+		- Waits for 'poweredOn' message from launcher-rocket pairs listed in config file
+	- Polls RestfulAPI for commands; Once all pairs are 'poweredOn', that are listed in the file
+		- When a 'check' command comes in
+			- Process and forward the command to the component (i.e. launcher)
+			- Send status update to RestfulAPI (i.e. 'checking')
+			- Wait for reply over serial
+			- Send response update to RestfulAPI (content of the check)
+			- Send status update to RestfulAPI (i.e. 'idle')
+		- When a 'launch' command comes in
+			- Process and forward the 'init' command to the component (i.e. launcher)
+			- Send status update to RestfulAPI (i.e. 'initializing')
+			- Wait for reply over serial
+			- Send status update to RestfulAPI (i.e. 'initialized')
+			- Process and forward the 'launch' command to the component (i.e. launcher)
+			- Wait for reply over serial
+			- Send status update to RestfulAPI (i.e. 'launched')
+			- Send response update to RestfulAPI (content of the launch data,from the launcher)
+			- Wait for rocket data over serial
+			- Send flight data to RestfulAPI (i.e. content of the processed rocket data)
+
+- Power on Rocket
+	- Wait for disconnected rip-chord
+		- Send sensor data over serial
+
+- Power on Launcher (and close the igniter relay)
+	- Wait for command over serial
+		- When a 'check' command comes in
+			- Collect sensor data and send over serial
+		- When a 'init' command comes in
+			- Allow for acceptance of 'launch' command
+			- Send command confirmation over serial
+		- When a 'launch' command comes in
+			- Collect sensor data
+			- Send command confirmation and sensor data over serial
