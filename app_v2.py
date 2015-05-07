@@ -5,8 +5,9 @@
 # @Note_1: Cannot change destination address (outside of XCTU) to switch communication between rocket and launcher, mid-process.
 # @Note_2: Future implementations need to check for a "General Command" command that will tell the system to get ALL commands at once.
 #         This will allow the user to post multiple commands and then execute them after they have ALL been chosen.
-# @NOTE_3: Future implementations will need to thread this portion of the process and handle multiple items being sent to the Serial
-# @Note_4: Future implementations will need to have threading to listen to different sub-units taht are responding to different commands
+# @TODO:	- Keep track of which rockets have been launched (keep a list)
+#			- Only check for flight_data when a rocket is still listed as having been launched
+#			- Determine when a rocket has landed (or passed 't' time) and stop listening to its data (remove from list)
 import sys
 import serial
 import socket
@@ -66,69 +67,76 @@ def set_configs(serial_config, api_config):
 			return False
 		# Setup Serial/XBee Communication
 		xb = serial.Serial(serial_config.comport, serial_config.bauderate, timeout=serial_config.timeout)
-#		# Read all powered on components
-#		while (xb.inWaiting() > 0):
-#			serialLine = xb.readline()
-#			try:
-#				jsonLine = json.loads(serialLine)
-#			except Exception, e:
-#				# @TODO: Post error to log
-#				continue
-#			# @TODO: if "powered" set to "idle"
-#			if 'node_id' in jsonLine.keys():
-#				if 'powerOn' in jsonLine.keys():
-#					if bool(jsonLine.keys()['powerOn']):
-#						end_point = api_config.address + '/' + jsonLine.keys()[:-1] + '/status'
-#						package = json.dumps({'status':'idle'})
-#						req = requests.post(end_point, data=package)
-#		# Check Serial/XBee Communication (for all Rocket & Launcher IDs)
-#		for RL_ID in RL_IDs:
-#		# @Note_1
-#		#	# Send Check for Rocket
-#		#	xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='rocket', content_type='command', content='check'))
-#		#	# Wait for Response
-#		#	time.sleep(2)	# Hardcoded Read Delay for Startup Responses
-#		#	rocket_response = json.loads(xb.readline())
-#			# Send Check for Launcher
-#			xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='check'))
-#			# Wait for Response
-#			time.sleep(2)	# Hardcoded Read Delay for Startup Responses
-#			launcher_response = json.loads(xb.readline())
-#			# Forward To Server
-#			# @TODO: Add Authentication: auth=(api_config.username, api_config.password)
-#			end_point = api_config.address + '/' + RL_ID + '/status'
-#			package = json.dumps({'launcher': launcher_response['status']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
-#			req = requests.post(end_point, data=package)
 		return xb
 	except Exception, e:
 		# @TODO: Log the Exception - Inter-Node Communication Error
 		return False 
 
+# @TODO: Make the function process dependent on the data returned from the serial (i.e. launcher_response)
 def check_command(RL_ID, xb, api_addr):
+	# Delete the command from the RestfulAPI, so it doesn't get repeated
+	end_point = api_addr + '/' + RL_ID + '/command'
+	req = requests.delete(end_point)
 	# Send Check and Wait for Response
 	xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='check'))
-	# Wait for Response
+	# Send Status Update
+	end_point = api_addr + '/' + RL_ID + '/status'
+	package = json.dumps({'status':'checking'})
+	req = requests.post(end_point, data=package)
+	# Wait for Serial Response
 	time.sleep(2)	# Hardcoded Read Delay for Startup Responses
 	launcher_response = json.loads(xb.readline())
-
+	# Send the status update to the RestfulAPI ('checking')
+	end_point = api_addr + '/' + RL_ID + '/status'
+	package = json.dumps({'launcher':'checked'})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+	req = requests.post(end_point, data=package)
+	# Send the response 
 	end_point = api_addr + '/' + RL_ID + '/response'
 	package = json.dumps({'launcher': launcher_response['response']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
 	req = requests.post(end_point, data=package)
+	# Reset status back to idle
+	end_point = api_addr + '/' + RL_ID + '/status'
+	package = json.dumps({'launcher':'idle'})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+	req = requests.post(end_point, data=package)
 
+# @TODO: Make the function process dependent on the data returned from the serial (i.e. launcher_response)
 def launch_command(RL_ID, xb, api_addr):
+	# Delete the command from the RestfulAPI, so it doesn't get repeated
+	end_point = api_addr + '/' + RL_ID + '/command'
+	req = requests.delete(end_point)
 	# Send Init and Wait for Response
 	xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='init'))
-	# Wait for Response
+	# Send Status Update
+	end_point = api_addr + '/' + RL_ID + '/status'
+	package = json.dumps({'status':'initializing'})
+	req = requests.post(end_point, data=package)
+	# Wait for Serial Response
 	time.sleep(2)	# Hardcoded Read Delay for Testing Responses
 	launcher_response = json.loads(xb.readline())
+	# Send Status Update
+	end_point = api_addr + '/' + RL_ID + '/status'
+	package = json.dumps({'status':'initialized'})
+	req = requests.post(end_point, data=package)
 	# Send Launch and Wait for Response
 	xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='launch'))
-	# Wait for Response
+	# Send Status Update
+	end_point = api_addr + '/' + RL_ID + '/status'
+	package = json.dumps({'status':'launching'})
+	req = requests.post(end_point, data=package)
+	# Wait for Serial Response
 	time.sleep(2)	# Hardcoded Read Delay for Testing Responses
 	launcher_response = json.loads(xb.readline())
-
+	# Send Status Update
+	end_point = api_addr + '/' + RL_ID + '/status'
+	package = json.dumps({'status':'launched'})
+	req = requests.post(end_point, data=package)
+	# Send the response 
 	end_point = api_addr + '/' + RL_ID + '/response'
 	package = json.dumps({'launcher': launcher_response['response']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+	req = requests.post(end_point, data=package)
+	# Send Status Update
+	end_point = api_addr + '/' + RL_ID + '/status'
+	package = json.dumps({'status':'sending_flight_data'})
 	req = requests.post(end_point, data=package)
 
 def process_command(RL_ID, command, xb, api_addr):
@@ -141,6 +149,7 @@ def process_command(RL_ID, command, xb, api_addr):
 ###--- Process ---###
 ## On Startup ##
 while True:
+	# @TODO: Log startup problems
 	# Read configuration files
 	serial_config, api_config, RL_IDs = read_config_files()
 	# Set dictionary for checking poweredOn node components
@@ -183,6 +192,7 @@ while True:
 command_process_threads = []
 while True:
 	# @Note_2
+	# Check for Commands
 	commands = {}
 	for RL_ID in RL_IDs:
 		end_point = api_config.address + '/' + RL_ID + '/command'
@@ -192,26 +202,14 @@ while True:
 		command_process_thread = threading.Thread(target=process_command, args=(RL_ID, commands[RL_ID], xb, api_config.address))
 		command_process_threads.append(command_process_thread)
 		command_process_thread.start()
+
+	# Remove completed threads
 	for command_process_thread in command_process_threads:
 		if not command_process_thread.isAlive():
 			del command_process_threads[command_process_thread]
 			# command_process_thread.handled = True
 
-	###################################################
-	# Commands from Command Center:
-	#	- check: Checks the node's wireless connection to the RL Pairs
-	#	Format: {command:{type:command_name, ids:[RL_IDs]}}
-	#	- init: Initializes the launch based on the RL Pairs
-	#	Format: {command:{type:command_name, ids:[RL_IDs]}}
-	#	- launch: Launches based on the RL Pairs
-	#	Format: {command:{type:command_name, ids:[RL_IDs]}}
-	#	- *restart: Re-starts the entire script
-	#	Format: {command:{type:command_name}}
-	###################################################
-	# Process the Command from the Command Center
-	# @Note_3
-#	for RL_ID in commands:
-#		process_command(RL_ID, commands[RL_ID], xb, api_config.address)
-	# @Note_4
+	# Listen on Serial for incomming data and forward as appropriate (i.e. flight data)
+	# @TODO
 	# Listen for Data from the Rocket
 	# Check for errors in JSON data and Append UTC-Timestamp
