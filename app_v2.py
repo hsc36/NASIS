@@ -16,6 +16,7 @@ import json
 import threading
 import requests
 import imuCalculations as imuCalc
+from datetime import datetime
 from collections import namedtuple
 from sys import argv
 
@@ -188,7 +189,6 @@ while True:
 	if len(node_poweredOn.keys()):
 		break
 ## Standby/Ready-to-Launch Process ## 
-# @TODO: Reorganize this process into separate functions and thread them
 command_process_threads = []
 while True:
 	# @Note_2
@@ -210,6 +210,17 @@ while True:
 			# command_process_thread.handled = True
 
 	# Listen on Serial for incomming data and forward as appropriate (i.e. flight data)
-	# @TODO
+	# @TODO: Add as a thread
 	# Listen for Data from the Rocket
+	serialLine = xb.readline()
 	# Check for errors in JSON data and Append UTC-Timestamp
+	try:
+		jsonLine = json.loads(serialLine)
+		# @TODO: Process the incomming IMU data
+		jsonLine['utc'] = datetime.utcnow()
+	except Exception, e:
+		# @TODO: Post error to log
+		continue
+	end_point = api_config.address + '/' + jsonLine.keys()['node_id'][:-1] + '/flight_data'
+	package = json.dumps(jsonLine)
+	req = requests.put(end_point, data=package)
