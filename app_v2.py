@@ -70,6 +70,7 @@ def set_configs(serial_config, api_config):
 		xb = serial.Serial(serial_config.comport, serial_config.bauderate, timeout=serial_config.timeout)
 		return xb
 	except Exception, e:
+		# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 		# @TODO: Log the Exception - Inter-Node Communication Error
 		return False 
 
@@ -141,10 +142,16 @@ def launch_command(RL_ID, xb, api_addr):
 	req = requests.post(end_point, data=package)
 
 def process_command(RL_ID, command, xb, api_addr):
-	return {
-		'check':check_command(RL_ID, xb, api_addr),
-		'launch':launch_command(RL_ID, xb, api_addr)
-	}[command]
+	print 'Process Command:', RL_ID, command, xb, api_addr
+	try:
+		return {
+			'check':check_command(RL_ID, xb, api_addr),
+			'launch':launch_command(RL_ID, xb, api_addr)
+		}[command]
+	except Exception, e:
+		# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+		# @TODO: Log the error
+		return False
 
 
 ###--- Process ---###
@@ -163,11 +170,13 @@ while True:
 ## Setup ##
 while True:
 	# Get all incomming 'poweredOn' componnet pairs, for each ID in the configuration files
-	while (xb.inWaiting() > 0):
+	# @DEBUG_LINE: break
+	while xb.inWaiting() > 0:
 		serialLine = xb.readline()
 		try:
 			jsonLine = json.loads(serialLine)
 		except Exception, e:
+			# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 			# @TODO: Post error to log
 			continue
 		# Check that both rocket and launcher components are powered on for the node
@@ -186,7 +195,7 @@ while True:
 			# Remove the dictionary entry
 			del node_poweredOn[RL_ID]
 	# Exit once all RL pairs are accounted for (the dictionary is empty)
-	if len(node_poweredOn.keys()):
+	if len(node_poweredOn.keys()) < 1:
 		break
 ## Standby/Ready-to-Launch Process ## 
 command_process_threads = []
@@ -195,32 +204,65 @@ while True:
 	# Check for Commands
 	commands = {}
 	for RL_ID in RL_IDs:
+		# @DEBUG_LINE: print 'Node ID:', RL_ID
 		end_point = api_config.address + '/' + RL_ID + '/command'
 		req = requests.get(end_point)
-		commands[RL_ID] = req.content
-		# @TODO: Create a new thread for each command and start the thread
-		command_process_thread = threading.Thread(target=process_command, args=(RL_ID, commands[RL_ID], xb, api_config.address))
-		command_process_threads.append(command_process_thread)
-		command_process_thread.start()
+		try:
+			if RL_ID in commands.keys():
+				if 'started' in commands[RL_ID]:
+					continue
+			else:
+				if not isinstance(req.json(), dict):
+					# @TODO: Account for potential errors and log them
+					continue
+				else:
+					# @DEBUG_LINE: print req.content
+					commands[RL_ID] = {}
+					commands[RL_ID]['command'] = req.json()['command']
+					# @TODO: Create a new thread for each command and start the thread
+					command_process_thread = threading.Thread(target=process_command, args=(RL_ID, commands[RL_ID]['command'], xb, api_config.address))
+					command_process_threads.append(command_process_thread)
+					command_process_thread.start()
+					command_process_thread.join()	# @NOTE: Fixed the duplicate-thread
+					commands[RL_ID]['started'] = True
+		except Exception, e:
+			# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+			# @TODO: Log the error
+			continue
+		# @DEBUG_LINE: print 'Command Dict:', commands
 
 	# Remove completed threads
 	for command_process_thread in command_process_threads:
 		if not command_process_thread.isAlive():
-			del command_process_threads[command_process_thread]
+			# @DEBUG_LINE: print "Command Killed"
+			command_process_threads.remove(command_process_thread)
+			try:
+				# @DEBUG_LINE: print "Entry Killed"
+				del commands[RL_ID]
+			except Exception, e:
+				# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+				# @TODO: Log the error
+				continue
 			# command_process_thread.handled = True
 
 	# Listen on Serial for incomming data and forward as appropriate (i.e. flight data)
 	# @TODO: Add as a thread
 	# Listen for Data from the Rocket
-	serialLine = xb.readline()
-	# Check for errors in JSON data and Append UTC-Timestamp
+	if xb.inWaiting() > 0:
+		serialLine = xb.readline()
+	# Check for errors in JSON data and append UTC timestamp
 	try:
+		# Load the json data
 		jsonLine = json.loads(serialLine)
+		# Process the IMU data and return the results
 		# @TODO: Process the incomming IMU data
-		jsonLine['utc'] = datetime.utcnow()
+		# Append the UTC date/time
+		jsonLine['utc'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+		# Package and forward the flight_data (i.e. with processed IMU data)
+		end_point = api_config.address + '/' + jsonLine.keys()['node_id'][:-1] + '/flight_data'
+		package = json.dumps(jsonLine)
+		req = requests.put(end_point, data=package)
 	except Exception, e:
+		# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 		# @TODO: Post error to log
 		continue
-	end_point = api_config.address + '/' + jsonLine.keys()['node_id'][:-1] + '/flight_data'
-	package = json.dumps(jsonLine)
-	req = requests.put(end_point, data=package)
