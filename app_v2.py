@@ -20,6 +20,8 @@ from datetime import datetime
 from collections import namedtuple
 from sys import argv
 
+debug = True if argv[-1].strip() == 'debug' else False
+
 ###--- Functions ---###
 # Extracts Data from the Configuration Files
 def read_config_files():
@@ -51,12 +53,14 @@ def read_config_files():
 def format_inter_node_data_package(node_id, branch_type, content_type, content):
 	#json.loads('{' + carrier + ':' + json.dumps(package._asdict()) + '}')
 	package = {}
-	package['node_id'] = node_id + branch_type[0].upper()
+	package['node_id'] = node_id + branch_type[0].upper()	# i.e. '000001L'
 	if content_type.upper() == 'MESSAGE':
 		package['message'] = content
-	elif content_type.upper() == 'COMMAND':
+	elif content_type.upper() == 'COMMAND':	# 
 		package['command'] = content
-	return json.dumps(package)
+	package = ''.join(json.dumps(package).split())
+	if debug: print package
+	return package
 
 # Sets and Checks Configuration Data
 def set_configs(serial_config, api_config):
@@ -70,7 +74,7 @@ def set_configs(serial_config, api_config):
 		xb = serial.Serial(serial_config.comport, serial_config.bauderate, timeout=serial_config.timeout)
 		return xb
 	except Exception, e:
-		# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+		if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 		# @TODO: Log the Exception - Inter-Node Communication Error
 		return False 
 
@@ -142,14 +146,14 @@ def launch_command(RL_ID, xb, api_addr):
 	req = requests.post(end_point, data=package)
 
 def process_command(RL_ID, command, xb, api_addr):
-	print 'Process Command:', RL_ID, command, xb, api_addr
+	if debug: print 'Process Command:', RL_ID, command, xb, api_addr
 	try:
 		return {
 			'check':check_command(RL_ID, xb, api_addr),
 			'launch':launch_command(RL_ID, xb, api_addr)
 		}[command]
 	except Exception, e:
-		# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+		if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 		# @TODO: Log the error
 		return False
 
@@ -170,13 +174,13 @@ while True:
 ## Setup ##
 while True:
 	# Get all incomming 'poweredOn' componnet pairs, for each ID in the configuration files
-	# @DEBUG_LINE: break
+	break
 	while xb.inWaiting() > 0:
 		serialLine = xb.readline()
 		try:
 			jsonLine = json.loads(serialLine)
 		except Exception, e:
-			# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+			if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 			# @TODO: Post error to log
 			continue
 		# Check that both rocket and launcher components are powered on for the node
@@ -204,7 +208,7 @@ while True:
 	# Check for Commands
 	commands = {}
 	for RL_ID in RL_IDs:
-		# @DEBUG_LINE: print 'Node ID:', RL_ID
+		if debug: print 'Node ID:', RL_ID
 		end_point = api_config.address + '/' + RL_ID + '/command'
 		req = requests.get(end_point)
 		try:
@@ -216,7 +220,7 @@ while True:
 					# @TODO: Account for potential errors and log them
 					continue
 				else:
-					# @DEBUG_LINE: print req.content
+					if debug: print req.content
 					commands[RL_ID] = {}
 					commands[RL_ID]['command'] = req.json()['command']
 					# @TODO: Create a new thread for each command and start the thread
@@ -226,21 +230,21 @@ while True:
 					command_process_thread.join()	# @NOTE: Fixed the duplicate-thread
 					commands[RL_ID]['started'] = True
 		except Exception, e:
-			# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+			if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 			# @TODO: Log the error
 			continue
-		# @DEBUG_LINE: print 'Command Dict:', commands
+		if debug: print 'Command Dict:', commands
 
 	# Remove completed threads
 	for command_process_thread in command_process_threads:
 		if not command_process_thread.isAlive():
-			# @DEBUG_LINE: print "Command Killed"
+			if debug: print "Command Killed"
 			command_process_threads.remove(command_process_thread)
 			try:
-				# @DEBUG_LINE: print "Entry Killed"
+				if debug: print "Entry Killed"
 				del commands[RL_ID]
 			except Exception, e:
-				# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+				if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 				# @TODO: Log the error
 				continue
 			# command_process_thread.handled = True
@@ -250,19 +254,19 @@ while True:
 	# Listen for Data from the Rocket
 	if xb.inWaiting() > 0:
 		serialLine = xb.readline()
-	# Check for errors in JSON data and append UTC timestamp
-	try:
-		# Load the json data
-		jsonLine = json.loads(serialLine)
-		# Process the IMU data and return the results
-		# @TODO: Process the incomming IMU data
-		# Append the UTC date/time
-		jsonLine['utc'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
-		# Package and forward the flight_data (i.e. with processed IMU data)
-		end_point = api_config.address + '/' + jsonLine.keys()['node_id'][:-1] + '/flight_data'
-		package = json.dumps(jsonLine)
-		req = requests.put(end_point, data=package)
-	except Exception, e:
-		# @DEBUG_LINE: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
-		# @TODO: Post error to log
-		continue
+		# Check for errors in JSON data and append UTC timestamp
+		try:
+			# Load the json data
+			jsonLine = json.loads(serialLine)
+			# Process the IMU data and return the results
+			# @TODO: Process the incomming IMU data
+			# Append the UTC date/time
+			jsonLine['utc'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+			# Package and forward the flight_data (i.e. with processed IMU data)
+			end_point = api_config.address + '/' + jsonLine.keys()['node_id'][:-1] + '/flight_data'
+			package = json.dumps(jsonLine)
+			req = requests.put(end_point, data=package)
+		except Exception, e:
+			if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+			# @TODO: Post error to log
+			continue
