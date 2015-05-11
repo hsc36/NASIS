@@ -5,15 +5,8 @@ from flask import Flask, request, Response
 
 ###--- Setup ---###
 # Read in Configurations
-api_config_file = ''
-try:
-	with open(api_config_file) as api_config:
-		for line in api_config:
-			if line.startswith('debug'):
-				debug_on = bool(line.split()[-1].strip())
-except Exception, e:
-	print 'EXCEPTION: API CONFIG -', e
-	debug_on = True
+debug = True if 'debug' in sys.argv else False
+local = True if 'local' in sys.argv else False
 
 # Construct the Flask API
 api = Flask(__name__, template_folder=".")
@@ -128,7 +121,7 @@ def log_func(node_id):
 # Run the API
 if __name__ == "__main__":
 	# Set Accessible IP is Debug is Off
-	if debug_on:
-		api.run(debug=debug_on)
+	if local:
+		api.run(debug=debug)
 	else:
-		api.run(debug=debug_on, host='0.0.0.0')
+		api.run(debug=debug, host='0.0.0.0')
