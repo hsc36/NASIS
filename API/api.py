@@ -56,7 +56,7 @@ def command_func(node_id):
 		command_dict[node_id] = ast.literal_eval(request.data)
 		return_content = Response(json.dumps({'return_content': 'Got It!'}), status=200, mimetype='application/json')
 	elif request.method == 'DELETE':
-		command_dict[node_id] = None
+		del command_dict[node_id]
 		return_content = Response(json.dumps({'return_content': 'Removed Entry!'}), status=200, mimetype='application/json')
 	return return_content
 
@@ -69,7 +69,7 @@ def status_func(node_id):
 		status_dict[node_id] = ast.literal_eval(request.data)
 		return_content = Response(json.dumps({'return_content': 'Got It!'}), status=200, mimetype='application/json')
 	elif request.method == 'DELETE':
-		status_dict[node_id] = None
+		del status_dict[node_id]
 		return_content = Response(json.dumps({'return_content': 'Removed Entry!'}), status=200, mimetype='application/json')
 	return return_content
 
@@ -82,7 +82,7 @@ def response_func(node_id):
 		response_dict[node_id] = ast.literal_eval(request.data)
 		return_content = Response(json.dumps({'return_content': 'Got It!'}), status=200, mimetype='application/json')
 	elif request.method == 'DELETE':
-		response_dict[node_id] = None
+		del response_dict[node_id]
 		return_content = Response(json.dumps({'return_content': 'Removed Entry!'}), status=200, mimetype='application/json')
 	return return_content
 
@@ -98,7 +98,7 @@ def flight_func(node_id):
 		flight_data_dict[node_id].append(ast.literal_eval(request.data))
 		return_content = Response(json.dumps({'return_content': 'Appended It!'}), status=200, mimetype='application/json')
 	elif request.method == 'DELETE':
-		flight_data_dict[node_id] = None
+		del flight_data_dict[node_id]
 		return_content = Response(json.dumps({'return_content': 'Removed Entry!'}), status=200, mimetype='application/json')
 	return return_content
 
@@ -117,6 +117,7 @@ def flight_func_get_specific(node_id, inclusive_start, inclusive_end):
 	return return_content
 
 # Log - Get and Set Logs for the Node's Activities
+# @NOTE: This endpoint is incomplete
 @api.route("/<node_id>/log", methods=['GET', 'DELETE'])	# Append Data to the Log
 def log_func(node_id):
 	if request.method == 'GET':
