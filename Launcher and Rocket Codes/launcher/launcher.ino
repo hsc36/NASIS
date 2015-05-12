@@ -127,9 +127,9 @@ void loop(){
       String temp = "";
       temp += "\"sound\":\"";
       temp += confirmSound;
-      temp += "\", \"distance\":\"";
+      temp += "\", \"gone\":\"";
       temp += confirmIR;
-      temp += "\", \"chord\":\"";
+      temp += "\", \"connected\":\"";
       temp += digitalRead(R2L_RIP_CHORD);
       temp += "\"}}";  // Close the JSON Package
       // Send the Data
