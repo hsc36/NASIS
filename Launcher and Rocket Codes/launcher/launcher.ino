@@ -89,6 +89,8 @@ void loop(){
       // Wait 3 Seconds
       delay(3000.0);
       digitalWrite(ALARM_RELAY, HIGH);
+      // Set the L2R to LOW, to ensure data is sent right after the launch occurs
+      digitalWrite(L2R_RIP_CHORD, HIGH);
       // Launch Rocket
       digitalWrite(LAUNCH_RELAY, LOW);
       // WAIT, then get data from both sensors before reporting successful launch
