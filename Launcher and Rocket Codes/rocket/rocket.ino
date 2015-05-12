@@ -16,8 +16,8 @@
 // SCL -> A5 :: 3
 
 #define GEIGER_COUNTER 2  // Geiger Counter Data PIN
-#define L2R_RIP_CHORD 6   // Launcher Signal to Rocket - Rip Chord PIN
-#define R2L_RIP_CHORD 7   // Rocket Signal to Launcher - Rip Chord PIN
+#define L2R_RIP_CHORD 6   // Launcher Signal to Rocket - Rip Chord PIN (External Launcher-Box Wire: Blue)
+#define R2L_RIP_CHORD 7   // Rocket Signal to Launcher - Rip Chord PIN (External Launcher-Box Wire: Green)
 
 // Using microseconds
 #define LOG_PERIOD 1000000  // 1s
@@ -46,13 +46,8 @@ void useInterrupt(boolean); // Func prototype keeps Arduino 0023 happy
 
 //String ID = "000001";
 boolean poweredOn = false;
-String powerOn = "{\"node_id\":\"000001R\",\"powerOn\":\"True\"}"; // Launcher Powered On
 String received = ""; // Message Received Over Serial (from RaspberryPi)
-// boolean initialized = false;
-// char initializeOn[] = "{\"" + ID + "_rocket" + "\":{\"initialized\":\"True\"}}"; // Launcher Initialized (Prepping for Launch)
-// char initCommand[] = "{\"" + ID + "_rocket" + "\":{\"initCommand\":\"True\"}}"; // RaspberryPi Sent Initialization Command
 boolean launched = false;
-// String launchCommand = "{\"" + ID + "_rocket" + "\":{\"launchCommand\":\"True\"}}"; // RaspberryPi Sent Launch Command
 String dataStr = "";	// Sensor Data
 
 // Geiger Counter Specific
@@ -123,7 +118,8 @@ void loop(){
   // If Power-On:
   if(!poweredOn){
   // Send "PoweredOn" over Serial
-    Serial.println(powerOn);
+    Serial.println("{\"node_id\":\"000001R\",\"power\":\"True\"}");
+    Serial.flush();
     poweredOn = true;
   }
   // If Rocket is Launched
