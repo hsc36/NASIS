@@ -117,7 +117,7 @@ uint32_t timer = micros();
 void loop(){
   // If Power-On:
   if(!poweredOn){
-  // Send "PoweredOn" over Serial
+    //Send "PoweredOn" over Serial
     Serial.println("{\"node_id\":\"000001R\",\"power\":\"True\"}");
     Serial.flush();
     poweredOn = true;
@@ -168,6 +168,7 @@ void loop(){
 
 // Collect and Package Data from Sensors
 void collectData(String lat, String lon){
+  //Serial.println("collectData");
   dataStr += "{\"gps\":";
   dataStr += "{\"lat\":" + lat +",\"lon\":" + lon +"}";
   dataStr += ",\"accelerometer\":";
@@ -199,6 +200,7 @@ void collectData(String lat, String lon){
 
 String getAccel(){  // Convert to binary, drop the lowest 4 bits, convert to float and multiply by 1000 to get number of "g"s 
   accel.read();
+  //Serial.println("getAccel");
   // Append the values in JSON format
   String accelStr = "";
   accelStr += "{\"x\":";
@@ -213,6 +215,7 @@ String getAccel(){  // Convert to binary, drop the lowest 4 bits, convert to flo
 
 String getGyro(){ // Multiply by 0.00875 to get dps (degrees-per-second)
   gyro.read();
+  //Serial.println("getGyro");
   // Append the values in JSON format
   String gyroStr = "";
   gyroStr += "{\"x\":";
@@ -226,6 +229,7 @@ String getGyro(){ // Multiply by 0.00875 to get dps (degrees-per-second)
 }
 
 String getGeig(float currMicros){
+  //Serial.println("getGeig");
   // Append the values in JSON format
   String geigerStr = "";
   prevMicros = currMicros;

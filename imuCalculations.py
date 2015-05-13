@@ -1,5 +1,5 @@
 # Name: Hillel Chaitoff
-# 
+# Calculations Module for the AltIMU-10v3
 # 
 
 def convertGyro(rawData):
@@ -15,7 +15,11 @@ def getOrientation(x1, x2, t):
 
 def convertAccel(rawData):
 	# Data returned in Meters-per-Second-Squared
-	return float(bin(rawData)[2,-4], 2)
+	# 1-Drop '0b' prefix
+	# 2-Grab leading 4 digits
+	# 3-Convert to float
+	# 4-Multiply by gravity (9.81 m/s^2)
+	return (float(bin(rawData)[2,-4], 2) * 9.81)
 
 def getSpeed(v0, a, t):
 	# Data returned in Meters-per-Second (no direction)
