@@ -172,10 +172,12 @@ while True:
 		break
 
 ## Setup ##
+# @TODO: A means of waiting for all 'powerOn' messages needs to be refined if waiting for multiple Rocket and Launcher nodes
+one_run_minimum = True	# Ensure that the process waits for at least on RL pair
 while True:
 	# Get all incomming 'poweredOn' componnet pairs, for each ID in the configuration files
-	break
-	while xb.inWaiting() > 0:
+	if debug: break
+	while xb.inWaiting() > 0 or one_run_minimum:
 		serialLine = xb.readline()
 		try:
 			jsonLine = json.loads(serialLine)
@@ -184,15 +186,16 @@ while True:
 			# @TODO: Post error to log
 			continue
 		# Check that both rocket and launcher components are powered on for the node
-		if 'powerOn' in jsonLine.keys():
-			if bool(jsonLine.keys()['powerOn']):
+		if 'power' in jsonLine.keys():
+			one_run_minimum = False
+			if bool(jsonLine.keys()['power']):
 				if jsonLine.keys()['node_id'][:-1] in RL_IDs:
 					if jsonLine.keys()['node_id'][-1] == 'R': 
-						node_poweredOn[jsonLine.keys()['node_id'][:-1]] += 1
+						node_poweredOn[jsonLine.keys()['node_id'][:-1]] += 'R'
 					if jsonLine.keys()['node_id'][-1] == 'L': 
-						node_poweredOn[jsonLine.keys()['node_id'][:-1]] += 2
+						node_poweredOn[jsonLine.keys()['node_id'][:-1]] += 'L'
 	for RL_ID in RL_IDs:
-		if node_poweredOn[RL_ID] > 2:
+		if ('R' in node_poweredOn[RL_ID]) and ('L' in node_poweredOn[RL_ID]):
 			end_point = api_config.address + '/' + jsonLine.keys()['node_id'][:-1] + '/status'
 			package = json.dumps({'status':'idle'})
 			req = requests.post(end_point, data=package)
