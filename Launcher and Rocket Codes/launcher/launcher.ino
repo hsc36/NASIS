@@ -14,16 +14,16 @@ int IR_PIN = A1;    // IR Distance Sensor on A1 - G1
 boolean poweredOn = false;
 // node_id = "000001L";
 String received = ""; // Message Received Over Serial (from RaspberryPi)
-String checkCommand = "{\"node_id\":\"000001L\", \"command\":\"check\"}";
-String checked = "{\"node_id\":\"000001L\", \"message\":\"checked\", \"package\":{";
+String checkCommand = "{\"node_id\":\"000001L\",\"command\":\"check\"}";
+String checked = "{\"node_id\":\"000001L\",\"message\":\"checked\",\"package\":{";
 boolean initialized = false;
-String initCommand = "{\"node_id\":\"000001L\", \"command\":\"init\"}"; // RaspberryPi Sent Initialization Command
+String initCommand = "{\"node_id\":\"000001L\",\"command\":\"init\"}"; // RaspberryPi Sent Initialization Command
 boolean confirmIR = false;
 boolean confirmSound = false;
 boolean launchConfirmed = false;
 boolean launched = false;
-String launchConfirm = "{\"node_id\":\"000001L\", \"message\":\"launched\", \"package\":{";
-String launchCommand = "{\"node_id\":\"000001L\", \"command\":\"launch\"}"; // RaspberryPi Sent Launch Command
+String launchConfirm = "{\"node_id\":\"000001L\",\"message\":\"launched\",\"package\":{";
+String launchCommand = "{\"node_id\":\"000001L\",\"command\":\"launch\"}"; // RaspberryPi Sent Launch Command
 
 // Setup //
 void setup(){
@@ -57,11 +57,11 @@ void loop(){
     // Read from the Serial for a Command
     received = Serial.readStringUntil('\n');
     // If "InitializeCommand" is received:
-    if(initCommand.equals(received)){
+    if(initCommand.equals(received)){ // .replace(" ","") doesn't work
       // Go from STANDBY to FULL_POWER mode
       initialized = true;
       // Send Confirmations of Initialization over Serial
-      Serial.println("{\"node_id\":\"000001L\", \"message\":\"initialized\"}");
+      Serial.println("{\"node_id\":\"000001L\",\"message\":\"initialized\"}");
       Serial.flush();
     }
     else if(checkCommand.equals(received)){
@@ -69,9 +69,9 @@ void loop(){
       String temp = "";
       temp += "\"sound\":\"";
       temp += checkSound();
-      temp += "\", \"distance\":\"";
+      temp += "\",\"distance\":\"";
       temp += checkIR();
-      temp += "\", \"chord\":\"";
+      temp += "\",\"chord\":\"";
       temp += digitalRead(R2L_RIP_CHORD);
       temp += "\"}}";  // Close the JSON Package
       // Send the Data
@@ -127,9 +127,9 @@ void loop(){
       String temp = "";
       temp += "\"sound\":\"";
       temp += confirmSound;
-      temp += "\", \"gone\":\"";
+      temp += "\",\"gone\":\"";
       temp += confirmIR;
-      temp += "\", \"connected\":\"";
+      temp += "\",\"connected\":\"";
       temp += digitalRead(R2L_RIP_CHORD);
       temp += "\"}}";  // Close the JSON Package
       // Send the Data
