@@ -58,8 +58,8 @@ def format_inter_node_data_package(node_id, branch_type, content_type, content):
 		package['message'] = content
 	elif content_type.upper() == 'COMMAND':	# 
 		package['command'] = content
-	package = ''.join(json.dumps(package).split())
-	if debug: print package
+	package = ''.join(json.dumps(package).split()).replace('u\'', '\'').replace('\'', '\"')
+	if debug: print "Package:", package
 	return package
 
 # Sets and Checks Configuration Data
@@ -91,14 +91,19 @@ def check_command(RL_ID, xb, api_addr):
 	req = requests.post(end_point, data=package)
 	# Wait for Serial Response
 	time.sleep(2)	# Hardcoded Read Delay for Startup Responses
-	launcher_response = json.loads(xb.readline())
+	while xb.inWaiting() < 1:
+		time.sleep(1)
+	responseLine = '{' + xb.readline().split('}{')[-1].strip()
+	if debug: print responseLine
+	launcher_response = json.loads(responseLine)
+	if debug: print "Launcher Response:", launcher_response
 	# Send the status update to the RestfulAPI ('checking')
 	end_point = api_addr + '/' + RL_ID + '/status'
 	package = json.dumps({'launcher':'checked'})	# @NOTE_1: - 'rocket': rocket_response['status'], 
 	req = requests.post(end_point, data=package)
 	# Send the response 
 	end_point = api_addr + '/' + RL_ID + '/response'
-	package = json.dumps({'launcher': launcher_response['response']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+	package = json.dumps({'launcher': launcher_response['message']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
 	req = requests.post(end_point, data=package)
 	# Reset status back to idle
 	end_point = api_addr + '/' + RL_ID + '/status'
@@ -118,7 +123,12 @@ def launch_command(RL_ID, xb, api_addr):
 	req = requests.post(end_point, data=package)
 	# Wait for Serial Response
 	time.sleep(2)	# Hardcoded Read Delay for Testing Responses
-	launcher_response = json.loads(xb.readline())
+	while xb.inWaiting() < 1:
+		time.sleep(1)
+	responseLine = '{' + xb.readline().split('}{')[-1].strip()
+	if debug: print responseLine
+	launcher_response = json.loads(responseLine)
+	if debug: print "Launcher Response:", launcher_response
 	# Send Status Update
 	end_point = api_addr + '/' + RL_ID + '/status'
 	package = json.dumps({'status':'initialized'})
@@ -131,14 +141,19 @@ def launch_command(RL_ID, xb, api_addr):
 	req = requests.post(end_point, data=package)
 	# Wait for Serial Response
 	time.sleep(2)	# Hardcoded Read Delay for Testing Responses
-	launcher_response = json.loads(xb.readline())
+	while xb.inWaiting() < 1:
+		time.sleep(1)
+	responseLine = '{' + xb.readline().split('}{')[-1].strip()
+	if debug: print responseLine
+	launcher_response = json.loads(responseLine)
+	if debug: print "Launcher Response:", launcher_response
 	# Send Status Update
 	end_point = api_addr + '/' + RL_ID + '/status'
 	package = json.dumps({'status':'launched'})
 	req = requests.post(end_point, data=package)
 	# Send the response 
 	end_point = api_addr + '/' + RL_ID + '/response'
-	package = json.dumps({'launcher': launcher_response['response']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+	package = json.dumps({'launcher': launcher_response['message']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
 	req = requests.post(end_point, data=package)
 	# Send Status Update
 	end_point = api_addr + '/' + RL_ID + '/status'
@@ -146,7 +161,10 @@ def launch_command(RL_ID, xb, api_addr):
 	req = requests.post(end_point, data=package)
 
 def process_command(RL_ID, command, xb, api_addr):
-	if debug: print 'Process Command:', RL_ID, command, xb, api_addr
+	if debug: print 'Process RL_ID:', RL_ID
+	if debug: print 'Process Command:', command
+	if debug: print 'Process Serial:', xb
+	if debug: print 'Process Address:', api_addr
 	try:
 		return {
 			'check':check_command(RL_ID, xb, api_addr),
@@ -165,7 +183,7 @@ while True:
 	# Read configuration files
 	serial_config, api_config, RL_IDs = read_config_files()
 	# Set dictionary for checking poweredOn node components
-	node_poweredOn = dict.fromkeys(RL_IDs, 0)
+	node_poweredOn = dict.fromkeys(RL_IDs, '')
 	# Set configurations
 	xb = set_configs(serial_config, api_config)
 	if not type(xb) is bool:	# @TODO: Improve this method of checking. It's bad and ugly.
@@ -176,7 +194,7 @@ while True:
 one_run_minimum = True	# Ensure that the process waits for at least on RL pair
 while True:
 	# Get all incomming 'poweredOn' componnet pairs, for each ID in the configuration files
-	if debug: break
+	#if debug: break
 	while xb.inWaiting() > 0 or one_run_minimum:
 		serialLine = xb.readline()
 		try:
@@ -187,16 +205,18 @@ while True:
 			continue
 		# Check that both rocket and launcher components are powered on for the node
 		if 'power' in jsonLine.keys():
+			if debug: print jsonLine
 			one_run_minimum = False
-			if bool(jsonLine.keys()['power']):
-				if jsonLine.keys()['node_id'][:-1] in RL_IDs:
-					if jsonLine.keys()['node_id'][-1] == 'R': 
-						node_poweredOn[jsonLine.keys()['node_id'][:-1]] += 'R'
-					if jsonLine.keys()['node_id'][-1] == 'L': 
-						node_poweredOn[jsonLine.keys()['node_id'][:-1]] += 'L'
+			if bool(jsonLine['power']):
+				if jsonLine['node_id'][:-1] in RL_IDs:
+					if debug: print node_poweredOn
+					if jsonLine['node_id'][-1] == 'R': 
+						node_poweredOn[jsonLine['node_id'][:-1]] += 'R'
+					if jsonLine['node_id'][-1] == 'L': 
+						node_poweredOn[jsonLine['node_id'][:-1]] += 'L'
 	for RL_ID in RL_IDs:
 		if ('R' in node_poweredOn[RL_ID]) and ('L' in node_poweredOn[RL_ID]):
-			end_point = api_config.address + '/' + jsonLine.keys()['node_id'][:-1] + '/status'
+			end_point = api_config.address + '/' + jsonLine['node_id'][:-1] + '/status'
 			package = json.dumps({'status':'idle'})
 			req = requests.post(end_point, data=package)
 			# Remove the dictionary entry
@@ -214,28 +234,30 @@ while True:
 		if debug: print 'Node ID:', RL_ID
 		end_point = api_config.address + '/' + RL_ID + '/command'
 		req = requests.get(end_point)
-		try:
-			if RL_ID in commands.keys():
-				if 'started' in commands[RL_ID]:
-					continue
-			else:
-				if not isinstance(req.json(), dict):
-					# @TODO: Account for potential errors and log them
-					continue
+		if req.status_code == 200:
+			try:
+				if debug: print req.content
+				if RL_ID in commands.keys():
+					if 'started' in commands[RL_ID]:
+						continue
 				else:
-					if debug: print req.content
-					commands[RL_ID] = {}
-					commands[RL_ID]['command'] = req.json()['command']
-					# @TODO: Create a new thread for each command and start the thread
-					command_process_thread = threading.Thread(target=process_command, args=(RL_ID, commands[RL_ID]['command'], xb, api_config.address))
-					command_process_threads.append(command_process_thread)
-					command_process_thread.start()
-					command_process_thread.join()	# @NOTE: Fixed the duplicate-thread
-					commands[RL_ID]['started'] = True
-		except Exception, e:
-			if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
-			# @TODO: Log the error
-			continue
+					if not isinstance(req.json(), dict):
+						# @TODO: Account for potential errors and log them
+						continue
+					else:
+						if debug: print req.content
+						commands[RL_ID] = {}
+						commands[RL_ID]['command'] = req.json()['command']
+						# @TODO: Create a new thread for each command and start the thread
+						command_process_thread = threading.Thread(target=process_command, args=(RL_ID, commands[RL_ID]['command'], xb, api_config.address))
+						command_process_threads.append(command_process_thread)
+						command_process_thread.start()
+						command_process_thread.join()	# @NOTE: Fixed the duplicate-thread
+						commands[RL_ID]['started'] = True
+			except Exception, e:
+				if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+				# @TODO: Log the error
+				continue
 		if debug: print 'Command Dict:', commands
 
 	# Remove completed threads
@@ -257,6 +279,7 @@ while True:
 	# Listen for Data from the Rocket
 	if xb.inWaiting() > 0:
 		serialLine = xb.readline()
+		if debug: print "Incomming Serial:", serialLine
 		# Check for errors in JSON data and append UTC timestamp
 		try:
 			# Load the json data
@@ -266,7 +289,7 @@ while True:
 			# Append the UTC date/time
 			jsonLine['utc'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
 			# Package and forward the flight_data (i.e. with processed IMU data)
-			end_point = api_config.address + '/' + jsonLine.keys()['node_id'][:-1] + '/flight_data'
+			end_point = api_config.address + '/' + jsonLine['node_id'][:-1] + '/flight_data'
 			package = json.dumps(jsonLine)
 			req = requests.put(end_point, data=package)
 		except Exception, e:
