@@ -127,7 +127,8 @@ def launch_command(RL_ID, xb, api_addr):
 	time.sleep(2)	# Hardcoded Read Delay for Testing Responses
 	while xb.inWaiting() < 1:
 		time.sleep(1)
-	responseLine = '{' + xb.readline().split('}{')[-1].strip()
+	responseLineContent = xb.readline()
+	responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
 	if debug: print responseLine
 	launcher_response = json.loads(responseLine)
 	if debug: print "Launcher Response:", launcher_response
@@ -143,11 +144,19 @@ def launch_command(RL_ID, xb, api_addr):
 	req = requests.post(end_point, data=package)
 	# Wait for Serial Response
 	time.sleep(2)	# Hardcoded Read Delay for Testing Responses
-	while xb.inWaiting() < 1:
+	unconfirmed_launch = True
+	while unconfirmed_launch:	# @NOTE: Need to deal with data from rocket being sent before launch confirmation
+		if xb.inWaiting() < 1:
+			time.sleep(1)
+			continue
+		responseLineContent = xb.readline()
+		responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
+		if debug: print responseLine
+		launcher_response = json.loads(responseLine)
+		if 'message' in launcher_response.keys():
+			if launcher_response['message'] = 'launched':
+				unconfirmed_launch = False
 		time.sleep(1)
-	responseLine = '{' + xb.readline().split('}{')[-1].strip()
-	if debug: print responseLine
-	launcher_response = json.loads(responseLine)
 	if debug: print "Launcher Response:", launcher_response
 	# Send Status Update
 	end_point = api_addr + '/' + RL_ID + '/status'
