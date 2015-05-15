@@ -289,7 +289,7 @@ while True:
 			# Process the IMU data and return the results
 			# @TODO: Process the incomming IMU data
 			# Append the UTC date/time
-			jsonLine['utc'] = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')
+			jsonLine['utc'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 			# Package and forward the flight_data (i.e. with processed IMU data)
 			end_point = api_config.address + '/' + jsonLine['node_id'][:-1] + '/flight_data'
 			package = json.dumps(jsonLine)
