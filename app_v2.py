@@ -93,7 +93,9 @@ def check_command(RL_ID, xb, api_addr):
 	time.sleep(2)	# Hardcoded Read Delay for Startup Responses
 	while xb.inWaiting() < 1:
 		time.sleep(1)
-	responseLine = '{' + xb.readline().split('}{')[-1].strip()
+	# @NOTE: Check for lumped pairs of JSON objects, caused by duplicate commands being sent??? Aliasing???
+	responseLineContent = xb.readline()
+	responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
 	if debug: print responseLine
 	launcher_response = json.loads(responseLine)
 	if debug: print "Launcher Response:", launcher_response

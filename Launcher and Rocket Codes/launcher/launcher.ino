@@ -15,14 +15,14 @@ boolean poweredOn = false;
 // node_id = "000001L";
 String received = ""; // Message Received Over Serial (from RaspberryPi)
 String checkCommand = "{\"node_id\":\"000001L\",\"command\":\"check\"}";
-String checked = "{\"node_id\":\"000001L\",\"message\":\"checked\",\"package\":{";
+String checked = "\n{\"node_id\":\"000001L\",\"message\":\"checked\",\"package\":{";
 boolean initialized = false;
 String initCommand = "{\"node_id\":\"000001L\",\"command\":\"init\"}"; // RaspberryPi Sent Initialization Command
 boolean confirmIR = false;
 boolean confirmSound = false;
 boolean launchConfirmed = false;
 boolean launched = false;
-String launchConfirm = "{\"node_id\":\"000001L\",\"message\":\"launched\",\"package\":{";
+String launchConfirm = "\n{\"node_id\":\"000001L\",\"message\":\"launched\",\"package\":{";
 String launchCommand = "{\"node_id\":\"000001L\",\"command\":\"launch\"}"; // RaspberryPi Sent Launch Command
 
 // Setup //
@@ -49,7 +49,7 @@ void loop(){
   // If Power-On:
   if(!poweredOn){
     // Send "PoweredOn" over Serial
-    Serial.println("{\"node_id\":\"000001L\",\"power\":\"True\"}");
+    Serial.println("\n{\"node_id\":\"000001L\",\"power\":\"True\"}");
     Serial.flush();
     poweredOn = true;
   }
@@ -61,7 +61,7 @@ void loop(){
       // Go from STANDBY to FULL_POWER mode
       initialized = true;
       // Send Confirmations of Initialization over Serial
-      Serial.println("{\"node_id\":\"000001L\",\"message\":\"initialized\"}");
+      Serial.println("\n{\"node_id\":\"000001L\",\"message\":\"initialized\"}");
       Serial.flush();
     }
     else if(checkCommand.equals(received)){

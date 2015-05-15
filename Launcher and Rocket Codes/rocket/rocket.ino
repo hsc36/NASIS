@@ -118,7 +118,7 @@ void loop(){
   // If Power-On:
   if(!poweredOn){
     //Send "PoweredOn" over Serial
-    Serial.println("{\"node_id\":\"000001R\",\"power\":\"True\"}");
+    Serial.println("\n{\"node_id\":\"000001R\",\"power\":\"True\"}");
     Serial.flush();
     poweredOn = true;
   }
@@ -144,7 +144,7 @@ void loop(){
       timer = micros(); // reset the timer
       //Serial.println(timer);
       // Get Sensor Data
-      dataStr = "{\"node_id\":\"000001R\"";
+      dataStr = "\n{\"node_id\":\"000001R\"";
       if(GPS.fix){
         dataStr+= ",";
         collectData(String(GPS.latitudeDegrees, 4), String(GPS.longitudeDegrees, 4));
