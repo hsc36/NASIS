@@ -80,96 +80,140 @@ def set_configs(serial_config, api_config):
 
 # @TODO: Make the function process dependent on the data returned from the serial (i.e. launcher_response)
 def check_command(RL_ID, xb, api_addr):
-	# Delete the command from the RestfulAPI, so it doesn't get repeated
-	end_point = api_addr + '/' + RL_ID + '/command'
-	req = requests.delete(end_point)
-	# Send Check and Wait for Response
-	xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='check'))
-	# Send Status Update
-	end_point = api_addr + '/' + RL_ID + '/status'
-	package = json.dumps({'status':'checking'})
-	req = requests.post(end_point, data=package)
-	# Wait for Serial Response
-	time.sleep(2)	# Hardcoded Read Delay for Startup Responses
-	while xb.inWaiting() < 1:
-		time.sleep(1)
-	# @NOTE: Check for lumped pairs of JSON objects, caused by duplicate commands being sent??? Aliasing???
-	responseLineContent = xb.readline()
-	responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
-	if debug: print responseLine
-	launcher_response = json.loads(responseLine)
-	if debug: print "Launcher Response:", launcher_response
-	# Send the status update to the RestfulAPI ('checking')
-	end_point = api_addr + '/' + RL_ID + '/status'
-	package = json.dumps({'launcher':'checked'})	# @NOTE_1: - 'rocket': rocket_response['status'], 
-	req = requests.post(end_point, data=package)
-	# Send the response 
-	end_point = api_addr + '/' + RL_ID + '/response'
-	package = json.dumps({'launcher': launcher_response['message']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
-	req = requests.post(end_point, data=package)
-	# Reset status back to idle
-	end_point = api_addr + '/' + RL_ID + '/status'
-	package = json.dumps({'launcher':'idle'})	# @NOTE_1: - 'rocket': rocket_response['status'], 
-	req = requests.post(end_point, data=package)
+	if debug: print "CHECK COMMAND"
+	try:
+		# Delete the command from the RestfulAPI, so it doesn't get repeated
+		end_point = api_addr + '/' + RL_ID + '/command'
+		req = requests.delete(end_point)
+		# Send Check and Wait for Response
+		xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='check'))
+		# Send Status Update
+		end_point = api_addr + '/' + RL_ID + '/status'
+		package = json.dumps({'status':'checking'})
+		req = requests.post(end_point, data=package)
+		# Wait for Serial Response
+		time.sleep(2)	# Hardcoded Read Delay for Startup Responses
+		unconfirmed_check = True
+		while unconfirmed_check:	# @NOTE: Need to deal with data from rocket being sent before launch confirmation
+			if xb.inWaiting() < 1:
+				time.sleep(1)
+				continue
+			responseLineContent = xb.readline()
+			responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
+			if debug: print "Response Line:", responseLine
+			try:
+				launcher_response = json.loads(responseLine)
+			except Exception, e:
+				if debug: print "Response Error -", e
+				continue
+			if 'message' in launcher_response.keys():
+				if launcher_response['message'] == 'checked':
+					unconfirmed_check = False
+			else:
+				continue
+			time.sleep(1)
+		if debug: print "Launcher Response:", launcher_response
+		# Send the status update to the RestfulAPI ('checking')
+		end_point = api_addr + '/' + RL_ID + '/status'
+		package = json.dumps({'launcher':'checked'})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+		req = requests.post(end_point, data=package)
+		# Send the response 
+		end_point = api_addr + '/' + RL_ID + '/response'
+		package = json.dumps({'launcher': launcher_response['package']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+		req = requests.post(end_point, data=package)
+		# Reset status back to idle
+		end_point = api_addr + '/' + RL_ID + '/status'
+		package = json.dumps({'launcher':'idle'})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+		req = requests.post(end_point, data=package)
+	except Exception, e:
+		if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+		if debug: sys.exit(0)
 
 # @TODO: Make the function process dependent on the data returned from the serial (i.e. launcher_response)
 def launch_command(RL_ID, xb, api_addr):
-	# Delete the command from the RestfulAPI, so it doesn't get repeated
-	end_point = api_addr + '/' + RL_ID + '/command'
-	req = requests.delete(end_point)
-	# Send Init and Wait for Response
-	xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='init'))
-	# Send Status Update
-	end_point = api_addr + '/' + RL_ID + '/status'
-	package = json.dumps({'status':'initializing'})
-	req = requests.post(end_point, data=package)
-	# Wait for Serial Response
-	time.sleep(2)	# Hardcoded Read Delay for Testing Responses
-	while xb.inWaiting() < 1:
-		time.sleep(1)
-	responseLineContent = xb.readline()
-	responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
-	if debug: print responseLine
-	launcher_response = json.loads(responseLine)
-	if debug: print "Launcher Response:", launcher_response
-	# Send Status Update
-	end_point = api_addr + '/' + RL_ID + '/status'
-	package = json.dumps({'status':'initialized'})
-	req = requests.post(end_point, data=package)
-	# Send Launch and Wait for Response
-	xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='launch'))
-	# Send Status Update
-	end_point = api_addr + '/' + RL_ID + '/status'
-	package = json.dumps({'status':'launching'})
-	req = requests.post(end_point, data=package)
-	# Wait for Serial Response
-	time.sleep(2)	# Hardcoded Read Delay for Testing Responses
-	unconfirmed_launch = True
-	while unconfirmed_launch:	# @NOTE: Need to deal with data from rocket being sent before launch confirmation
-		if xb.inWaiting() < 1:
+	if debug: print "LAUNCH COMMAND"
+	try:
+		# Delete the command from the RestfulAPI, so it doesn't get repeated
+		end_point = api_addr + '/' + RL_ID + '/command'
+		req = requests.delete(end_point)
+		# Send Init and Wait for Response
+		xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='init'))
+		# Send Status Update
+		end_point = api_addr + '/' + RL_ID + '/status'
+		package = json.dumps({'status':'initializing'})
+		req = requests.post(end_point, data=package)
+		# Wait for Serial Response
+		time.sleep(2)	# Hardcoded Read Delay for Testing Responses
+		unconfirmed_init = True
+		while unconfirmed_init:	# @NOTE: Need to deal with data from rocket being sent before launch confirmation
+			if xb.inWaiting() < 1:
+				time.sleep(1)
+				continue
+			responseLineContent = xb.readline()
+			responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
+			if debug: print "Response Line:", responseLine
+			try:
+				launcher_response = json.loads(responseLine)
+			except Exception, e:
+				if debug: print "Response Error -", e
+				continue
+			if 'message' in launcher_response.keys():
+				if launcher_response['message'] == 'initialized':
+					unconfirmed_init = False
+			else:
+				continue
 			time.sleep(1)
-			continue
-		responseLineContent = xb.readline()
-		responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
-		if debug: print responseLine
-		launcher_response = json.loads(responseLine)
-		if 'message' in launcher_response.keys():
-			if launcher_response['message'] = 'launched':
-				unconfirmed_launch = False
-		time.sleep(1)
-	if debug: print "Launcher Response:", launcher_response
-	# Send Status Update
-	end_point = api_addr + '/' + RL_ID + '/status'
-	package = json.dumps({'status':'launched'})
-	req = requests.post(end_point, data=package)
-	# Send the response 
-	end_point = api_addr + '/' + RL_ID + '/response'
-	package = json.dumps({'launcher': launcher_response['message']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
-	req = requests.post(end_point, data=package)
-	# Send Status Update
-	end_point = api_addr + '/' + RL_ID + '/status'
-	package = json.dumps({'status':'sending_flight_data'})
-	req = requests.post(end_point, data=package)
+		if debug: print "Launcher Response:", launcher_response
+		# Send Status Update
+		end_point = api_addr + '/' + RL_ID + '/status'
+		package = json.dumps({'status':'initialized'})
+		req = requests.post(end_point, data=package)
+		# Send Launch and Wait for Response
+		xb.write(format_inter_node_data_package(node_id=RL_ID, branch_type='launcher', content_type='command', content='launch'))
+		# Send Status Update
+		end_point = api_addr + '/' + RL_ID + '/status'
+		package = json.dumps({'status':'launching'})
+		req = requests.post(end_point, data=package)
+		# Wait for Serial Response
+		time.sleep(2)	# Hardcoded Read Delay for Testing Responses
+		unconfirmed_launch = True
+		while unconfirmed_launch:	# @NOTE: Need to deal with data from rocket being sent before launch confirmation
+			if xb.inWaiting() < 1:
+				time.sleep(1)
+				continue
+			responseLineContent = xb.readline()
+			responseLine = '{' + responseLineContent.split('}{')[-1].strip() if '}{' in responseLineContent else responseLineContent.strip()
+			if debug: print "Response Line:", responseLine
+			try:
+				launcher_response = json.loads(responseLine)
+			except Exception, e:
+				if debug: print "Response Error -", e
+				continue
+			if 'message' in launcher_response.keys():
+				if launcher_response['message'] == 'launched':
+					unconfirmed_launch = False
+			else:
+				continue
+			time.sleep(1)
+		if debug: print "Launcher Response:", launcher_response
+		# Send Status Update
+		end_point = api_addr + '/' + RL_ID + '/status'
+		package = json.dumps({'status':'launched'})
+		req = requests.post(end_point, data=package)
+		# Send the response 
+		end_point = api_addr + '/' + RL_ID + '/response'
+		package = json.dumps({'launcher': launcher_response['package']})	# @NOTE_1: - 'rocket': rocket_response['status'], 
+		req = requests.post(end_point, data=package)
+		# Send Status Update
+		end_point = api_addr + '/' + RL_ID + '/status'
+		package = json.dumps({'status':'sending_flight_data'})
+		req = requests.post(end_point, data=package)
+		# Setup the Endpoint for FLight Data
+		end_point = api_addr + '/' + RL_ID + '/flight_data'
+		req = requests.post(end_point)
+	except Exception, e:
+		if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
+		if debug: sys.exit(0)
 
 def process_command(RL_ID, command, xb, api_addr):
 	if debug: print 'Process RL_ID:', RL_ID
@@ -177,10 +221,16 @@ def process_command(RL_ID, command, xb, api_addr):
 	if debug: print 'Process Serial:', xb
 	if debug: print 'Process Address:', api_addr
 	try:
-		return {
-			'check':check_command(RL_ID, xb, api_addr),
-			'launch':launch_command(RL_ID, xb, api_addr)
-		}[command]
+		#return {
+		#	'check':check_command(RL_ID, xb, api_addr),
+		#	'launch':launch_command(RL_ID, xb, api_addr)
+		#}[command]
+		if command == 'check':
+			check_command(RL_ID, xb, api_addr)
+		elif command == 'launch':
+			launch_command(RL_ID, xb, api_addr)
+		else:
+			raise ValueError('Unknown Command -', command)
 	except Exception, e:
 		if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 		# @TODO: Log the error
@@ -247,7 +297,7 @@ while True:
 		req = requests.get(end_point)
 		if req.status_code == 200:
 			try:
-				if debug: print req.content
+				if debug: print "Request Content:", req.content
 				if RL_ID in commands.keys():
 					if 'started' in commands[RL_ID]:
 						continue
@@ -256,7 +306,6 @@ while True:
 						# @TODO: Account for potential errors and log them
 						continue
 					else:
-						if debug: print req.content
 						commands[RL_ID] = {}
 						commands[RL_ID]['command'] = req.json()['command']
 						# @TODO: Create a new thread for each command and start the thread
@@ -301,8 +350,10 @@ while True:
 			jsonLine['utc'] = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 			# Package and forward the flight_data (i.e. with processed IMU data)
 			end_point = api_config.address + '/' + jsonLine['node_id'][:-1] + '/flight_data'
+			if debug: print "End Point:", end_point
 			package = json.dumps(jsonLine)
 			req = requests.put(end_point, data=package)
+			if debug: print "Request Content:", req.content
 		except Exception, e:
 			if debug: print 'Exception: ', e, sys.exc_info()[-1].tb_lineno
 			# @TODO: Post error to log
