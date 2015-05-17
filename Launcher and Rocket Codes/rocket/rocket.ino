@@ -149,7 +149,7 @@ void loop(){
         dataStr+= ",";
         collectData(String(GPS.latitudeDegrees, 4), String(GPS.longitudeDegrees, 4));
       }else{
-        collectData("NO GPS LAT","NO GPS LON");
+        collectData("\"NO GPS LAT\"","\"NO GPS LON\"");
       }
       dataStr += "}";
       Serial.println(dataStr);
@@ -169,7 +169,7 @@ void loop(){
 // Collect and Package Data from Sensors
 void collectData(String lat, String lon){
   //Serial.println("collectData");
-  dataStr += "{\"gps\":";
+  dataStr += ",\"gps\":";
   dataStr += "{\"lat\":" + lat +",\"lon\":" + lon +"}";
   dataStr += ",\"accelerometer\":";
   // Get Accelerometer Data
@@ -190,12 +190,10 @@ void collectData(String lat, String lon){
   dataStr += ",\"microseconds\":";
   unsigned long currMicros = micros();
   dataStr += currMicros; 
-  dataStr += "}";
   // Get Geiger Counter Data
   dataStr += ",\"geigerCounter\":";
   dataStr += getGeig(currMicros);
   maySendData = true;
-  dataStr += "}";
 }
 
 String getAccel(){  // Convert to binary, drop the lowest 4 bits, convert to float and multiply by 1000 to get number of "g"s 
